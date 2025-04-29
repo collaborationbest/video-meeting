@@ -11,7 +11,10 @@ import MeetingTranscription from './MeetingTranscription';
 
 const VideoMeeting: React.FC = () => {
   const navigate = useNavigate();
-  const [roomIdInput, setRoomIdInput] = useState<string>('');
+  const [roomIdInput, setRoomIdInput] = useState<string>(() => {
+    // Check localStorage for a saved roomId
+    return localStorage.getItem('meeting_roomId') || '';
+  });
   const {
     localStream,
     remoteStreams,
@@ -33,6 +36,16 @@ const VideoMeeting: React.FC = () => {
   useEffect(() => {
     // Start local stream when component mounts
     startLocalStream();
+    
+    // Check if we have a saved roomId in localStorage
+    const savedRoomId = localStorage.getItem('meeting_roomId');
+    if (savedRoomId && !roomId) {
+      console.log('Restoring session from saved roomId:', savedRoomId);
+      // Set a slight delay to ensure stream is initialized
+      setTimeout(() => {
+        joinRoom(savedRoomId);
+      }, 1000);
+    }
     
     return () => {
       // Clean up when component unmounts
@@ -91,12 +104,13 @@ const VideoMeeting: React.FC = () => {
     navigate('/');
   };
 
-  // Function to handle joining a meeting with a specific room ID
+  // Handle Join Meeting using input or stored roomId
   const handleJoinMeeting = () => {
-    if (roomIdInput.trim()) {
-      joinRoom(roomIdInput.trim());
+    const idToUse = roomIdInput.trim() || localStorage.getItem('meeting_roomId') || '';
+    if (idToUse) {
+      joinRoom(idToUse);
     } else {
-      joinRoom();
+      joinRoom(); // Generate a new random ID
     }
   };
 
@@ -114,7 +128,11 @@ const VideoMeeting: React.FC = () => {
         <div className="flex flex-col items-center gap-4 mb-4">
           <div className="flex gap-2 w-full max-w-md">
             <Input
-              placeholder="Enter Room ID to join existing meeting"
+              placeholder={
+                localStorage.getItem('meeting_roomId') 
+                  ? "Using saved room ID (or enter a new one)" 
+                  : "Enter Room ID to join existing meeting"
+              }
               value={roomIdInput}
               onChange={(e) => setRoomIdInput(e.target.value)}
               className="flex-1"

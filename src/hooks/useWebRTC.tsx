@@ -126,13 +126,14 @@ export const useWebRTC = () => {
     ws.onopen = () => {
       console.log('WebSocket connected to signaling server');
       setError(null);
-      
+      const roomid = localStorage.getItem('meeting_roomId');
+      console.log('roomid', roomid);
       // If we have a roomId, rejoin the room
-      if (roomId) {
-        console.log(`Joining room: ${roomId}`);
+      if (roomid) {
+        console.log(`Joining room: ${roomid}`);
         ws.send(JSON.stringify({
           type: 'join',
-          roomId,
+          roomId: roomid,
           userId: userId.current
         }));
         
@@ -142,7 +143,7 @@ export const useWebRTC = () => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
               type: 'get-participants',
-              roomId,
+              roomId: roomid,
               userId: userId.current
             }));
           }
@@ -487,6 +488,9 @@ export const useWebRTC = () => {
       const newRoomId = specificRoomId || Math.random().toString(36).substring(2, 8);
       setRoomId(newRoomId);
       
+      // Save to localStorage
+      localStorage.setItem('meeting_roomId', newRoomId);
+      
       // Initialize WebSocket connection
       await new Promise<void>((resolve) => {
         // Clean up any existing WebSocket
@@ -547,6 +551,9 @@ export const useWebRTC = () => {
     setRemoteStreams([]);
     setRoomId(null);
     stopLocalStream();
+    
+    // Remove from localStorage
+    localStorage.removeItem('meeting_roomId');
     
     toast({
       title: "Left meeting",

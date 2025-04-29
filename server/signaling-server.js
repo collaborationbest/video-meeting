@@ -58,6 +58,7 @@ function handleJoin(ws, roomId, userId) {
   }
 
   const room = rooms.get(roomId);
+  console.log(room);
   room.set(userId, ws);
 
   // Notify all participants in the room about the new user
@@ -136,8 +137,10 @@ function handleLeave(ws, roomId, userId) {
 
 function handleGetParticipants(ws, roomId, userId) {
   const room = rooms.get(roomId);
+  console.log('room', room);
   if (room) {
     const participants = Array.from(room.keys());
+    console.log('participants', participants);
     ws.send(JSON.stringify({
       type: 'participants',
       participants
