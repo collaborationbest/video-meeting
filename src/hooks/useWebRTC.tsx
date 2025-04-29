@@ -26,13 +26,13 @@ export const useWebRTC = () => {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  
+
   const userId = useRef<string>(Math.random().toString(36).substring(2, 10));
   const wsRef = useRef<WebSocket | null>(null);
 
   const setupPeerConnection = useCallback((peerConnection: RTCPeerConnection, peerId: string) => {
     console.log(`Setting up peer connection for ${peerId}`);
-    
+
     // Add local tracks to the connection
     if (localStream) {
       localStream.getTracks().forEach(track => {
@@ -49,16 +49,16 @@ export const useWebRTC = () => {
     peerConnection.ontrack = (event) => {
       console.log(`Received track from ${peerId}:`, event.streams.length ? 'stream available' : 'no stream');
       const [remoteStream] = event.streams;
-      
+
       if (remoteStream) {
         console.log(`Processing remote stream from ${peerId} with ${remoteStream.getTracks().length} tracks`);
         setRemoteStreams(prev => {
           // Check if we already have this stream
-          const exists = prev.some(stream => 
-            stream.id === remoteStream.id || 
+          const exists = prev.some(stream =>
+            stream.id === remoteStream.id ||
             stream.getTracks().some(t => remoteStream.getTracks().some(rt => rt.id === t.id))
           );
-          
+
           if (!exists) {
             console.log(`Adding new remote stream from ${peerId}`);
             return [...prev, remoteStream];
@@ -71,10 +71,10 @@ export const useWebRTC = () => {
     // Log connection state changes
     peerConnection.oniceconnectionstatechange = () => {
       console.log(`ICE connection state changed for ${peerId}: ${peerConnection.iceConnectionState}`);
-      
+
       // If the connection failed or disconnected, attempt to reconnect
-      if (peerConnection.iceConnectionState === 'failed' || 
-          peerConnection.iceConnectionState === 'disconnected') {
+      if (peerConnection.iceConnectionState === 'failed' ||
+        peerConnection.iceConnectionState === 'disconnected') {
         console.log(`Attempting to restart ICE for ${peerId}`);
         peerConnection.restartIce();
       }
@@ -111,7 +111,7 @@ export const useWebRTC = () => {
   // Initialize WebSocket connection
   const initializeWebSocket = useCallback(() => {
     console.log('Initializing WebSocket, current state:', wsRef.current ? wsRef.current.readyState : 'no connection');
-    
+
     // Close existing connection if any
     if (wsRef.current) {
       console.log('Closing existing WebSocket connection');
@@ -120,7 +120,7 @@ export const useWebRTC = () => {
     }
 
     console.log('Creating new WebSocket connection to ws://localhost:8081');
-    const ws = new WebSocket('ws://localhost:8081');
+    const ws = new WebSocket('wss://video-meeting-backend.vercel.app');
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -136,7 +136,7 @@ export const useWebRTC = () => {
           roomId: roomid,
           userId: userId.current
         }));
-        
+
         // Also request current participants list
         console.log('Requesting participants list');
         setTimeout(() => {
@@ -154,7 +154,7 @@ export const useWebRTC = () => {
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       console.log('WebSocket message received:', data.type);
-      
+
       switch (data.type) {
         case 'joined':
           console.log(`User ${data.userId} joined room ${data.roomId}`);
@@ -166,17 +166,17 @@ export const useWebRTC = () => {
             }
             return prev;
           });
-          
+
           // Create new peer connection for the joined user
           if (data.userId !== userId.current) {
             console.log(`Creating peer connection for joined user: ${data.userId}`);
             const peerConnection = new RTCPeerConnection(configuration);
             setupPeerConnection(peerConnection, data.userId);
-            
+
             // Create and send offer
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
-            
+
             ws.send(JSON.stringify({
               type: 'offer',
               offer,
@@ -191,10 +191,10 @@ export const useWebRTC = () => {
           console.log('Received participants list:', data.participants);
           // Update participants list from server response
           const existingParticipants = participants.map(p => p.id);
-          const newParticipants = data.participants.filter(id => 
+          const newParticipants = data.participants.filter(id =>
             id !== userId.current && !existingParticipants.includes(id)
           );
-          
+
           // Add any new participants to the list
           if (newParticipants.length > 0) {
             console.log('Adding new participants:', newParticipants);
@@ -205,17 +205,17 @@ export const useWebRTC = () => {
                 connection: new RTCPeerConnection(configuration)
               }))
             ]);
-            
+
             // Create connections for new participants
             newParticipants.forEach(async (id) => {
               console.log(`Creating connection for existing participant: ${id}`);
               const peerConnection = new RTCPeerConnection(configuration);
               setupPeerConnection(peerConnection, id);
-              
+
               // Create and send offer
               const offer = await peerConnection.createOffer();
               await peerConnection.setLocalDescription(offer);
-              
+
               ws.send(JSON.stringify({
                 type: 'offer',
                 offer,
@@ -233,11 +233,11 @@ export const useWebRTC = () => {
             console.log(`Received offer from ${data.from}`);
             const peerConnection = new RTCPeerConnection(configuration);
             const streamConnection = setupPeerConnection(peerConnection, data.from);
-            
+
             await streamConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
             const answer = await streamConnection.createAnswer();
             await streamConnection.setLocalDescription(answer);
-            
+
             ws.send(JSON.stringify({
               type: 'answer',
               answer,
@@ -275,7 +275,7 @@ export const useWebRTC = () => {
                 console.log(`Added ICE candidate for ${data.from}`);
               } catch (err) {
                 console.error(`Error adding ICE candidate for ${data.from}:`, err);
-                
+
                 // If the connection isn't ready for candidates yet, buffer them
                 if (participant.connection.remoteDescription === null) {
                   console.log(`Remote description not set yet for ${data.from}, cannot add ICE candidate`);
@@ -291,29 +291,29 @@ export const useWebRTC = () => {
           console.log(`User ${data.userId} left room ${data.roomId}`);
           // Find the participant that left
           const leavingParticipant = participants.find(p => p.id === data.userId);
-          
+
           // Close their connection
           if (leavingParticipant) {
             console.log(`Closing connection for user ${data.userId}`);
             leavingParticipant.connection.close();
           }
-          
+
           // Remove the participant from the list
           setParticipants(prev => prev.filter(p => p.id !== data.userId));
-          
+
           // Remove their streams
           setRemoteStreams(prev => {
             // Find streams that belong to the leaving participant
             // This is a best-effort approach since streams may not be explicitly tied to participants
             const remainingStreams = [...prev];
             console.log(`Filtering remote streams after ${data.userId} left, before: ${remainingStreams.length}`);
-            
+
             // Since we can't directly map streams to participants, we'll remove all inactive streams
             const filteredStreams = remainingStreams.filter(stream => {
               const hasActiveTracks = stream.getTracks().some(track => track.readyState === 'live');
               return hasActiveTracks;
             });
-            
+
             console.log(`After filtering: ${filteredStreams.length} streams remain`);
             return filteredStreams;
           });
@@ -342,7 +342,7 @@ export const useWebRTC = () => {
   const startLocalStream = useCallback(async () => {
     try {
       setError(null);
-      
+
       // Only create a new stream if we don't have one or if the current one is inactive
       if (!localStream || localStream.getTracks().some(track => track.readyState === 'ended')) {
         console.log('Requesting media devices...');
@@ -354,24 +354,24 @@ export const useWebRTC = () => {
             facingMode: "user"
           }
         });
-        
+
         console.log('Media devices granted, stream created:', {
           videoTracks: stream.getVideoTracks().length,
           audioTracks: stream.getAudioTracks().length
         });
-        
+
         // Stop any existing tracks before setting new stream
         if (localStream) {
           console.log('Stopping existing stream tracks');
           localStream.getTracks().forEach(track => track.stop());
         }
-        
+
         // Verify the stream has video tracks
         const videoTracks = stream.getVideoTracks();
         if (videoTracks.length === 0) {
           throw new Error('No video track found in the stream');
         }
-        
+
         // Verify the video track is enabled and working
         videoTracks.forEach(track => {
           console.log('Video track state:', {
@@ -379,30 +379,30 @@ export const useWebRTC = () => {
             readyState: track.readyState,
             label: track.label
           });
-          
+
           if (!track.enabled) {
             track.enabled = true;
           }
-          
+
           // Add event listeners to track
           track.onended = () => {
             console.log('Video track ended');
             setError('Camera stream ended unexpectedly');
           };
-          
+
           track.onmute = () => {
             console.log('Video track muted');
           };
-          
+
           track.onunmute = () => {
             console.log('Video track unmuted');
           };
         });
-        
+
         setLocalStream(stream);
         setIsAudioEnabled(true);
         setIsVideoEnabled(true);
-        
+
         // Log stream information for debugging
         console.log('Local stream initialized with tracks:', stream.getTracks().map(track => ({
           kind: track.kind,
@@ -421,7 +421,7 @@ export const useWebRTC = () => {
       });
     }
   }, [localStream]);
-  
+
   // Stop local media stream
   const stopLocalStream = useCallback(() => {
     if (localStream) {
@@ -429,40 +429,40 @@ export const useWebRTC = () => {
       setLocalStream(null);
     }
   }, [localStream]);
-  
+
   // Toggle audio on/off
   const toggleAudio = useCallback(() => {
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
       const enabled = !isAudioEnabled;
-      
+
       audioTracks.forEach(track => {
         track.enabled = enabled;
       });
-      
+
       setIsAudioEnabled(enabled);
     }
   }, [localStream, isAudioEnabled]);
-  
+
   // Toggle video on/off
   const toggleVideo = useCallback(() => {
     if (localStream) {
       const videoTracks = localStream.getVideoTracks();
       const enabled = !isVideoEnabled;
-      
+
       videoTracks.forEach(track => {
         track.enabled = enabled;
       });
-      
+
       setIsVideoEnabled(enabled);
     }
   }, [localStream, isVideoEnabled]);
-  
+
   // Join a meeting room
   const joinRoom = useCallback(async (specificRoomId?: string) => {
     try {
       setError(null);
-      
+
       // Always initialize a new stream when joining a room
       console.log('Initializing local stream before joining room...');
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -473,24 +473,24 @@ export const useWebRTC = () => {
           facingMode: "user"
         }
       });
-      
+
       // Stop any existing tracks
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
       }
-      
+
       // Set the new stream
       setLocalStream(stream);
       setIsAudioEnabled(true);
       setIsVideoEnabled(true);
-      
+
       // Use provided room ID or generate a new one
       const newRoomId = specificRoomId || Math.random().toString(36).substring(2, 8);
       setRoomId(newRoomId);
-      
+
       // Save to localStorage
       localStorage.setItem('meeting_roomId', newRoomId);
-      
+
       // Initialize WebSocket connection
       await new Promise<void>((resolve) => {
         // Clean up any existing WebSocket
@@ -499,7 +499,7 @@ export const useWebRTC = () => {
           wsRef.current.close();
           wsRef.current = null;
         }
-        
+
         console.log('Starting new WebSocket for room:', newRoomId);
         // Initialize new WebSocket with a slight delay to ensure clean state
         setTimeout(() => {
@@ -507,13 +507,13 @@ export const useWebRTC = () => {
           resolve();
         }, 500);
       });
-      
+
       console.log('Successfully joined room with stream:', {
         roomId: newRoomId,
         videoTracks: stream.getVideoTracks().length,
         audioTracks: stream.getAudioTracks().length
       });
-      
+
     } catch (err) {
       console.error('Error joining room:', err);
       setError(`Failed to join meeting: ${err instanceof Error ? err.message : String(err)}`);
@@ -524,7 +524,7 @@ export const useWebRTC = () => {
       });
     }
   }, [initializeWebSocket]);
-  
+
   // Leave the meeting room
   const leaveRoom = useCallback(() => {
     // Notify other participants
@@ -535,55 +535,55 @@ export const useWebRTC = () => {
         userId: userId.current
       }));
     }
-    
+
     // Close all peer connections
     participants.forEach(participant => {
       participant.connection.close();
     });
-    
+
     // Close WebSocket connection
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
-    
+
     setParticipants([]);
     setRemoteStreams([]);
     setRoomId(null);
     stopLocalStream();
-    
+
     // Remove from localStorage
     localStorage.removeItem('meeting_roomId');
-    
+
     toast({
       title: "Left meeting",
       description: "You have left the meeting successfully."
     });
   }, [participants, stopLocalStream, roomId]);
-  
+
   // Clean up when component unmounts
   useEffect(() => {
     return () => {
       console.log('Component unmounting, cleaning up connections');
-      
+
       // Clean up peer connections
       participants.forEach(participant => {
         participant.connection.close();
       });
-      
+
       // Only close WebSocket if we're actually unmounting, not during re-renders
       if (wsRef.current) {
         console.log('Closing WebSocket connection on unmount');
         wsRef.current.close();
       }
-      
+
       // Clean up media stream
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
       }
     };
   }, [participants, localStream]);
-  
+
   return {
     localStream,
     remoteStreams,
