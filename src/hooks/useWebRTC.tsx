@@ -120,7 +120,7 @@ export const useWebRTC = () => {
     }
 
     console.log('Creating new WebSocket connection to ws://localhost:8081');
-    const ws = new WebSocket('wss://video-meeting-backend.vercel.app');
+    const ws = new WebSocket('wss://1092-2602-fa59-1-362-00-1.ngrok-free.app');
     wsRef.current = ws;
 
     ws.onopen = () => {
